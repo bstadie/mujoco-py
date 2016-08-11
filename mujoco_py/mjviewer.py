@@ -20,7 +20,9 @@ def _glfw_error_callback(e, d):
 
 class MjViewer(object):
 
-    def __init__(self, visible=True, init_width=500, init_height=500, go_fast=False):
+    def __init__(self, visible=True, init_width=500, init_height=500,
+                 go_fast=False, fixed_cam=False, fixed_cam_coordinates=None,
+                 cam_azenith=None, cam_elevation=None, cam_distance_multiplier=0.5):
         """
         Set go_fast=True to run at full speed instead of waiting for the 60 Hz monitor refresh
         init_width and init_height set window size. On Mac Retina displays, they are in nominal
@@ -31,7 +33,6 @@ class MjViewer(object):
         self.init_width = init_width
         self.init_height = init_height
         self.go_fast = not visible or go_fast
-
         self.last_render_time = 0
         self.objects = mjcore.MJVOBJECTS()
         self.cam = mjcore.MJVCAMERA()
@@ -56,6 +57,12 @@ class MjViewer(object):
         self._last_mouse_x = 0
         self._last_mouse_y = 0
 
+        self.cam_distance_multiplier = cam_distance_multiplier
+        self.fixed_cam_coordinates = fixed_cam_coordinates
+        self.fixed_cam = fixed_cam
+        self.cam_azenith = cam_azenith
+        self.cam_elevation = cam_elevation
+
     def set_model(self, model):
         glfw.make_context_current(self.window)
         self.model = model
@@ -74,12 +81,22 @@ class MjViewer(object):
 
     def autoscale(self):
         glfw.make_context_current(self.window)
-        self.cam.lookat[0] = self.model.stat.center[0]
-        self.cam.lookat[1] = self.model.stat.center[1]
-        self.cam.lookat[2] = self.model.stat.center[2]
-        self.cam.distance = 0.5 * self.model.stat.extent
+        if self.fixed_cam_coordinates is None:
+            self.cam.lookat[0] = self.model.stat.center[0]
+            self.cam.lookat[1] = self.model.stat.center[1]
+            self.cam.lookat[2] = self.model.stat.center[2]
+        else:
+            self.cam.lookat[0] = self.fixed_cam_coordinates[0]
+            self.cam.lookat[1] = self.fixed_cam_coordinates[1]
+            self.cam.lookat[2] = self.fixed_cam_coordinates[2]
+        self.cam.distance = self.cam_distance_multiplier * self.model.stat.extent
         self.cam.camid = -1
-        self.cam.trackbodyid = 1
+        if self.fixed_cam is False:
+            self.cam.trackbodyid = 1
+        if self.cam_azenith is not None:
+            self.cam.azimuth = self.cam_azenith
+        if self.cam_elevation is not None:
+            self.cam.elevation = self.cam_elevation
         width, height = self.get_dimensions()
         mjlib.mjv_updateCameraPose(byref(self.cam), width*1.0/height)
 
@@ -101,7 +118,16 @@ class MjViewer(object):
 
         mjlib.mjv_setCamera(self.model.ptr, self.data.ptr, byref(self.cam))
 
-        mjlib.mjv_updateCameraPose(byref(self.cam), rect.width*1.0/rect.height)
+        if self.fixed_cam is False:
+            mjlib.mjv_updateCameraPose(byref(self.cam), rect.width*1.0/rect.height)
+        #print 'kay'
+        #print self.cam.lookat[0]
+        #print self.cam.lookat[1]
+        #print self.cam.lookat[2]
+        #print self.cam.azimuth
+        #print self.cam.elevation
+        #else:
+        #    self.cam.distance = self.cam_distance_multiplier * self.model.stat.extent
 
         mjlib.mjr_render(0, rect, byref(self.objects), byref(self.ropt), byref(self.cam.pose), byref(self.con))
 
